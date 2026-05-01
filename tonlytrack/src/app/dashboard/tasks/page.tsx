@@ -135,17 +135,16 @@ export default function TasksPage() {
                 </select>
               </div>
               <div>
-                <label>Task</label>
-                <select value={form.title} onChange={e => set('title', e.target.value)} required>
-                  <option value="">Select or type task...</option>
-                  {Object.entries(FREQ_TASKS).map(([freq, tasks]) =>
-                    <optgroup key={freq} label={freq.toUpperCase()}>{tasks.map(t => <option key={t} value={t}>{t}</option>)}</optgroup>
-                  )}
-                </select>
-              </div>
-              <div>
-                <label>Or Custom Task Name</label>
-                <input placeholder="Custom task..." value={form.title} onChange={e => set('title', e.target.value)} />
+                <label>Task Name</label>
+                <input placeholder="e.g. Engine oil check, Tire rotation..." value={form.title} onChange={e => set('title', e.target.value)} required />
+                <div style={{ marginTop:8, display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {FREQ_TASKS[form.frequency]?.map(suggestion => (
+                    <button key={suggestion} type="button" onClick={() => set('title', suggestion)}
+                      style={{ padding:'4px 10px', borderRadius:20, border:'1px solid rgba(249,115,22,0.3)', background:'rgba(249,115,22,0.08)', color:'#fb923c', fontSize:11, cursor:'pointer', transition:'all 0.2s' }}>
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 <div>

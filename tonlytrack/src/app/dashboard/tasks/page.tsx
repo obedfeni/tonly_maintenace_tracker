@@ -39,7 +39,7 @@ export default function TasksPage() {
     const { data } = await q
     setTasks(data || [])
     const [t, p] = await Promise.all([
-      supabase.from('trucks').select('id,truck_number,model').eq('status','active'),
+      supabase.from('trucks').select('id,truck_number,model,status').order('truck_number'),
       supabase.from('profiles').select('id,full_name,role').eq('role','technician'),
     ])
     setTrucks(t.data || [])
@@ -131,7 +131,7 @@ export default function TasksPage() {
                 <label>Truck</label>
                 <select value={form.truck_id} onChange={e => set('truck_id', e.target.value)} required>
                   <option value="">Select truck...</option>
-                  {trucks.map(t => <option key={t.id} value={t.id}>{t.truck_number} — {t.model}</option>)}
+                  {trucks.map(t => <option key={t.id} value={t.id}>{t.truck_number} — {t.model} ({t.status.replace(/_/g,' ')})</option>)}
                 </select>
               </div>
               <div>

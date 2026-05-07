@@ -1,126 +1,95 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useLang } from '@/lib/lang-context'
+import { t } from '@/lib/i18n'
 
-export default function ReportsPage() {
-  const [data, setData] = useState<any>({ tasksByStatus:{}, tasksByFreq:{}, trucksByStatus:{}, techPerf:[], topTrucks:[] })
+const ROLE_COLOR: Record<string,string> = { technician:'#1565c0', supervisor:'#6a1b9a', senior_supervisor:'#c62828' }
+const ROLE_ICON:  Record<string,string>  = { technician:'🔧', supervisor:'👔', senior_supervisor:'⭐' }
+const ROLE_ORDER = ['senior_supervisor','supervisor','technician']
+
+export default function TeamPage() {
+  const { lang } = useLang()
+  const [team, setTeam] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [tasks, trucks, profiles] = await Promise.all([
-        supabase.from('maintenance_tasks').select('status,frequency,truck_id,completed_by,assigned_to'),
-        supabase.from('trucks').select('id,truck_number,model,status'),
-        supabase.from('profiles').select('id,full_name,role').eq('role','technician'),
+      const [profiles, tasks] = await Promise.all([
+        supabase.from('profiles').select('*').order('full_name'),
+        supabase.from('maintenance_tasks').select('assigned_to,completed_by,status'),
       ])
-      const t = tasks.data || []
-      const tr = trucks.data || []
-      const p = profiles.data || []
-
-      const tasksByStatus = t.reduce((a: any, x) => { a[x.status] = (a[x.status]||0)+1; return a }, {})
-      const tasksByFreq = t.reduce((a: any, x) => { a[x.frequency] = (a[x.frequency]||0)+1; return a }, {})
-      const trucksByStatus = tr.reduce((a: any, x) => { a[x.status] = (a[x.status]||0)+1; return a }, {})
-
-      const techPerf = p.map(tech => ({
-        name: tech.full_name,
-        assigned: t.filter(x => x.assigned_to === tech.id).length,
-        completed: t.filter(x => x.completed_by === tech.id).length,
-      })).sort((a,b) => b.completed - a.completed)
-
-      const truckTaskCounts = tr.map(truck => ({
-        label: truck.truck_number,
-        model: truck.model,
-        total: t.filter(x => x.truck_id === truck.id).length,
-        completed: t.filter(x => x.truck_id === truck.id && x.status === 'completed').length,
-        overdue: t.filter(x => x.truck_id === truck.id && x.status === 'overdue').length,
-      })).sort((a,b) => b.total - a.total).slice(0,8)
-
-      setData({ tasksByStatus, tasksByFreq, trucksByStatus, techPerf, topTrucks: truckTaskCounts })
-      setLoading(false)
+      const tsk = tasks.data || []
+      const members = (profiles.data || []).map(p => ({
+        ...p,
+        completed: tsk.filter((x:any) => x.completed_by === p.id).length,
+        pending:   tsk.filter((x:any) => x.assigned_to === p.id && ['pending','in_progress'].includes(x.status)).length,
+        total:     tsk.filter((x:any) => x.assigned_to === p.id).length,
+      }))
+      setTeam(members); setLoading(false)
     }
     load()
   }, [])
 
-  const StatRow = ({ label, value, color }: any) => (
-    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-      <span style={{ fontSize:14, color:'#8888aa', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</span>
-      <span style={{ fontFamily:'Bebas Neue', fontSize:22, color: color || '#e2e2f0' }}>{value}</span>
-    </div>
-  )
+  const ROLE_LABEL: Record<string,string> = {
+    technician:        lang==='zh' ? '技术员' : 'Technicians',
+    supervisor:        lang==='zh' ? '主管'   : 'Supervisors',
+    senior_supervisor: lang==='zh' ? '高级主管': 'Senior Supervisors',
+  }
 
   return (
-    <div style={{ padding:32 }}>
-      <div style={{ marginBottom:28 }}>
-        <div style={{ fontFamily:'Bebas Neue', fontSize:32, letterSpacing:2 }}>PERFORMANCE <span style={{ color:'#f97316' }}>REPORTS</span></div>
-        <div style={{ color:'#555570', fontSize:13 }}>Maintenance analytics overview</div>
+    <div style={{ padding:28 }}>
+      <div style={{ marginBottom:24, paddingBottom:20, borderBottom:'1px solid #e0e0e0' }}>
+        <div style={{ fontFamily:'Bebas Neue', fontSize:32, letterSpacing:2, color:'#111' }}>{t('teamMembers',lang)}</div>
+        <div style={{ color:'#888', fontSize:13 }}>{team.length} {t('membersReg',lang)}</div>
       </div>
 
-      {loading ? <div style={{ color:'#333350', textAlign:'center', padding:60 }}>Loading reports...</div> : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:20 }}>
-
-          <div className="card" style={{ padding:20 }}>
-            <div style={{ fontFamily:'Bebas Neue', fontSize:18, letterSpacing:1, marginBottom:16, color:'#f97316' }}>TASKS BY STATUS</div>
-            {Object.entries(data.tasksByStatus).map(([k, v]: any) => (
-              <StatRow key={k} label={k} value={v} color={k==='completed'?'#4ade80':k==='overdue'?'#f87171':k==='in_progress'?'#60a5fa':'#fbbf24'} />
-            ))}
-          </div>
-
-          <div className="card" style={{ padding:20 }}>
-            <div style={{ fontFamily:'Bebas Neue', fontSize:18, letterSpacing:1, marginBottom:16, color:'#f97316' }}>TASKS BY FREQUENCY</div>
-            {Object.entries(data.tasksByFreq).map(([k, v]: any) => <StatRow key={k} label={k} value={v} />)}
-          </div>
-
-          <div className="card" style={{ padding:20 }}>
-            <div style={{ fontFamily:'Bebas Neue', fontSize:18, letterSpacing:1, marginBottom:16, color:'#f97316' }}>FLEET STATUS</div>
-            {Object.entries(data.trucksByStatus).map(([k, v]: any) => (
-              <StatRow key={k} label={k} value={v} color={k==='active'?'#4ade80':k==='out_of_service'?'#f87171':'#fbbf24'} />
-            ))}
-          </div>
-
-          <div className="card" style={{ padding:20, gridColumn:'span 1' }}>
-            <div style={{ fontFamily:'Bebas Neue', fontSize:18, letterSpacing:1, marginBottom:16, color:'#f97316' }}>TECHNICIAN PERFORMANCE</div>
-            {data.techPerf.length === 0
-              ? <div style={{ color:'#333350', fontSize:13 }}>No technician data yet.</div>
-              : data.techPerf.map((tech: any) => (
-                <div key={tech.name} style={{ padding:'10px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                    <span style={{ fontSize:14, fontWeight:600 }}>{tech.name}</span>
-                    <span style={{ fontSize:12, color:'#4ade80', fontWeight:600 }}>{tech.completed}/{tech.assigned} done</span>
-                  </div>
-                  <div style={{ height:6, background:'#1a1a24', borderRadius:3, overflow:'hidden' }}>
-                    <div style={{ height:'100%', background:'linear-gradient(90deg,#f97316,#ea580c)', borderRadius:3, width: tech.assigned ? `${Math.round(tech.completed/tech.assigned*100)}%` : '0%', transition:'width 0.5s' }} />
-                  </div>
+      {loading ? <div style={{ color:'#bbb', textAlign:'center', padding:40 }}>{t('loading',lang)}</div> :
+       team.length === 0 ? <div style={{ color:'#bbb', textAlign:'center', padding:40 }}>{t('noMembers',lang)}</div> : (
+        <div>
+          {ROLE_ORDER.map(role => {
+            const members = team.filter(m => m.role === role)
+            if (!members.length) return null
+            return (
+              <div key={role} style={{ marginBottom:28 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14, paddingLeft:4 }}>
+                  <span>{ROLE_ICON[role]}</span>
+                  <span style={{ fontFamily:'Bebas Neue', fontSize:16, letterSpacing:1, color: ROLE_COLOR[role] }}>{ROLE_LABEL[role]}</span>
+                  <span style={{ fontSize:12, color:'#bbb', fontWeight:600, background:'#f5f5f5', padding:'1px 8px', borderRadius:20, border:'1px solid #e0e0e0' }}>{members.length}</span>
                 </div>
-              ))
-            }
-          </div>
-
-          <div className="card" style={{ padding:20, gridColumn:'span 2' }}>
-            <div style={{ fontFamily:'Bebas Neue', fontSize:18, letterSpacing:1, marginBottom:16, color:'#f97316' }}>TOP TRUCKS BY MAINTENANCE ACTIVITY</div>
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                <thead>
-                  <tr style={{ color:'#555570' }}>
-                    {['Truck','Model','Total','Completed','Overdue'].map(h => (
-                      <th key={h} style={{ textAlign:'left', padding:'8px 12px', borderBottom:'1px solid rgba(255,255,255,0.06)', fontWeight:600 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.topTrucks.map((t: any) => (
-                    <tr key={t.label} style={{ borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-                      <td style={{ padding:'10px 12px', color:'#f97316', fontWeight:700 }}>{t.label}</td>
-                      <td style={{ padding:'10px 12px', color:'#c0c0d8' }}>{t.model}</td>
-                      <td style={{ padding:'10px 12px', fontFamily:'Bebas Neue', fontSize:18 }}>{t.total}</td>
-                      <td style={{ padding:'10px 12px', color:'#4ade80', fontFamily:'Bebas Neue', fontSize:18 }}>{t.completed}</td>
-                      <td style={{ padding:'10px 12px', color:'#f87171', fontFamily:'Bebas Neue', fontSize:18 }}>{t.overdue}</td>
-                    </tr>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:12 }}>
+                  {members.map(m => (
+                    <div key={m.id} className="card" style={{ padding:18, borderLeft:`3px solid ${ROLE_COLOR[m.role]}` }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                        <div style={{ width:38, height:38, borderRadius:'50%', background:`${ROLE_COLOR[m.role]}15`, border:`2px solid ${ROLE_COLOR[m.role]}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                          {ROLE_ICON[m.role]}
+                        </div>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontWeight:700, fontSize:14, color:'#111', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.full_name}</div>
+                          <div style={{ fontSize:10, color:ROLE_COLOR[m.role], fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginTop:1 }}>{m.role.replace(/_/g,' ')}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize:11, color:'#aaa', marginBottom:12 }}>✉️ {m.email}</div>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <div style={{ flex:1, textAlign:'center', background:'#e8f5e9', borderRadius:8, padding:'8px 0', border:'1px solid #a5d6a7' }}>
+                          <div style={{ fontFamily:'Bebas Neue', fontSize:22, color:'#2e7d32', lineHeight:1 }}>{m.completed}</div>
+                          <div style={{ fontSize:9, color:'#2e7d32', marginTop:2, fontWeight:700 }}>{t('done',lang)}</div>
+                        </div>
+                        <div style={{ flex:1, textAlign:'center', background:'#fff8e1', borderRadius:8, padding:'8px 0', border:'1px solid #ffe082' }}>
+                          <div style={{ fontFamily:'Bebas Neue', fontSize:22, color:'#f57f17', lineHeight:1 }}>{m.pending}</div>
+                          <div style={{ fontSize:9, color:'#f57f17', marginTop:2, fontWeight:700 }}>{t('pending',lang)}</div>
+                        </div>
+                        <div style={{ flex:1, textAlign:'center', background:'#f5f5f5', borderRadius:8, padding:'8px 0', border:'1px solid #e0e0e0' }}>
+                          <div style={{ fontFamily:'Bebas Neue', fontSize:22, color:'#888', lineHeight:1 }}>{m.total}</div>
+                          <div style={{ fontSize:9, color:'#aaa', marginTop:2, fontWeight:700 }}>{t('total',lang)}</div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

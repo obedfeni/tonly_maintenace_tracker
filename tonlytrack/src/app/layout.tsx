@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import '../styles/globals.css'
 import { AuthProvider } from '@/lib/auth'
+import { LangProvider } from '@/lib/lang-context'
 
 export const metadata: Metadata = {
   title: 'TonlyTrack — Fleet Maintenance System',
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <LangProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </LangProvider>
       </body>
     </html>
   )
